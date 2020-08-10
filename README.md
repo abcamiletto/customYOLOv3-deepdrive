@@ -5,7 +5,7 @@
 
 This part below was written at the start of the project: you can find everything it might have been useful in this project
 
-Main publications given in the lectures [SegNet](https://arxiv.org/pdf/1511.00561.pdf) [FCN](https://arxiv.org/pdf/1411.4038.pdf) [DilatedConv](https://arxiv.org/pdf/1511.07122.pdf)
+Main publications given in the lectures [SegNet](https://arxiv.org/pdf/1511.00561.pdf), [FCN](https://arxiv.org/pdf/1411.4038.pdf), [DilatedConv](https://arxiv.org/pdf/1511.07122.pdf)
 
 ### Main datasets available
 Inside the parenthesis there are the main tasks i'm looking into.
