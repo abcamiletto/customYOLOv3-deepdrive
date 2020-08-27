@@ -12,7 +12,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 1,
+   "execution_count": 22,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -33,7 +33,7 @@
     "# from tensorflow.keras import losses\n",
     "# from tensorflow.keras import optimizers\n",
     "from tensorflow.keras.callbacks import TensorBoard\n",
-    "from tensorflow.keras.layers import Conv2D, LeakyReLU, Add, BatchNormalization, GlobalAveragePooling2D\n"
+    "from tensorflow.keras.layers import Conv2D, LeakyReLU, Add, BatchNormalization, GlobalAveragePooling2D, Dense, Softmax\n"
    ]
   },
   {
@@ -70,41 +70,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# class Residual_Block(keras.layers.Layer):\n",
-    "#     def __init__(self, filters_alpha, filter_beta):\n",
-    "#         super().__init__()\n",
-    "#         self.hidden = [\n",
-    "#             Conv2D(filters = filters_alpha,\n",
-    "#                    kernel_size = 1,\n",
-    "#                    strides = 1,\n",
-    "#                    padding = \"same\",\n",
-    "#                    use_bias=False),\n",
-    "#             BatchNormalization(),\n",
-    "#             LeakyReLU(alpha=0.1),\n",
-    "#             Conv2D(filters = filters_beta,\n",
-    "#                    kernel_size = 3,\n",
-    "#                    strides = 1,\n",
-    "#                    padding = \"same\",\n",
-    "#                    use_bias=False),\n",
-    "#             BatchNormalization(),\n",
-    "#             LeakyReLU(alpha=0.1)\n",
-    "#         ]\n",
-    "#     def call(self, inputs):\n",
-    "#         Z = inputs\n",
-    "#         skip_Z = inputs\n",
-    "#         for layer in self.hidden:\n",
-    "#             Z = layer(Z)\n",
-    "#         output = Add()([Z, skip_Z])\n",
-    "#         return output"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 4,
+   "execution_count": 14,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -127,7 +93,7 @@
     "\n",
     "\n",
     "class Residual_Block(keras.layers.Layer):\n",
-    "    def __init__(self, filters_alpha, filter_beta, **kwargs):\n",
+    "    def __init__(self, filters_alpha, filters_beta, **kwargs):\n",
     "        super().__init__(**kwargs)\n",
     "        self.hidden1 = Conv_2D_plus(filters_alpha, 1)\n",
     "        self.hidden2 = Conv_2D_plus(filters_beta, 3)\n",
@@ -143,38 +109,57 @@
    ]
   },
   {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Defining the model itself"
+   ]
+  },
+  {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 27,
    "metadata": {},
    "outputs": [],
    "source": [
-    "class Darknet_53(keras.Model):\n",
-    "    def __init__ (self, num_classes, **kwargs):\n",
+    "class Darknet53(keras.Model):\n",
+    "    def __init__ (self, classification = False, num_classes = None, **kwargs):\n",
     "        super().__init__(**kwargs)\n",
     "        self.num_classes = num_classes\n",
-    "\n",
+    "        self.classification = classification\n",
     "        self.pre_conv = Conv_2D_plus(32, 3)\n",
     "        self.conv_res = [self.Darknet_res_block(64, 1),\n",
     "                          self.Darknet_res_block(128, 2),\n",
     "                          self.Darknet_res_block(256, 8),\n",
     "                          self.Darknet_res_block(512, 8),\n",
     "                          self.Darknet_res_block(1024, 4)]\n",
+    "        if self.classification:\n",
+    "            self.out1 = GlobalAveragePooling2D()\n",
+    "            self.out2 = Dense(1000)\n",
+    "            self.out3 = Dense(self.num_classes)\n",
+    "            self.out4 = Softmax()\n",
     "        \n",
     "    def call(self, inputs):\n",
     "        Y = inputs\n",
-    "        Y = pre_conv(Y)\n",
-    "        for res_block in conv_res:\n",
+    "        Y = self.pre_conv(Y)\n",
+    "        for res_block in self.conv_res:\n",
     "            for layer in res_block:\n",
     "                Y = layer(Y)\n",
+    "        if self.classification:\n",
+    "            Y = self.out1(Y)\n",
+    "            Y = self.out2(Y)\n",
+    "            Y = self.out3(Y)\n",
+    "            Y = self.out4(Y)\n",
     "        return Y\n",
     "    \n",
     "    def Darknet_res_block(self, num_filters, num_blocks):\n",
     "        layers = [Conv_2D_plus(num_filters, 3, stride = 2)]\n",
     "        for i in range(num_blocks):\n",
-    "            layer.append(Residual_Block(num_filters // 2, num_filters))\n",
-    "        return layer\n",
+    "            layers.append(Residual_Block(num_filters // 2, num_filters))\n",
+    "        return layers\n",
     "\n",
-    "    "
+    "    \n",
+    "model = Darknet53(classification = True, num_classes = 8)\n",
+    "model.compile()"
    ]
   }
  ],
