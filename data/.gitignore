@@ -1,3 +1,5 @@
 dataset_bdd/
 dataset_cityscape/
 dataset_darknet/
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
