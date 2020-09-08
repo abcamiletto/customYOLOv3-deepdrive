@@ -3,6 +3,6 @@ dataset_cityscape/
 dataset_darknet/
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
-*.ipynb
+Data_Preprocessing.ipynb
 example.png
-
+*.py
