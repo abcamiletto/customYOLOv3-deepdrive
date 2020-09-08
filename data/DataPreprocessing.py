@@ -24,10 +24,6 @@ masks = [[0,1,2],
 
 
 
-tf_anchors = tf.constant([(10, 10), (22, 23), (47, 33), (39, 81), (82, 54), (127, 86),
-                         (118, 168), (194, 130), (257, 221)], dtype=tf.float32)
-
-
 class Preprocess:
     def __init__(self, num_classes = 10, output_dimension = 1280, training = True):
         self.num_classes = num_classes
