@@ -1,4 +1,11 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 # Utility libraries
+import os
+import random
+import matplotlib.pyplot as plt
+import cv2
 from pathlib import Path
 
 # Core libraries
@@ -7,7 +14,9 @@ import tensorflow as tf
 
 from tensorflow import Tensor
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Conv2D, LeakyReLU, Add, BatchNormalization, GlobalAveragePooling2D, Softmax, Input
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.layers import Conv2D, LeakyReLU, Add, BatchNormalization, GlobalAveragePooling2D, Dense, Softmax, Input
+
 
 def Conv2D_plus(inputs, filters, kernel_size, stride = 1) -> Tensor:
     X = Conv2D(filters = filters,
@@ -31,16 +40,37 @@ def ResidualBlock(inputs, num_filters, num_blocks) -> Tensor:
         W = ResidualUnit(W, num_filters // 2, num_filters)
     return W
 
-def load_darknet_weights(model, weights_path = None, save_model = False):
+def Darknet(inputs = Input(shape=(1280, 1280, 3)),
+            classification = False,
+            num_classes = 10,
+            trained = False) -> Model:
+
+    Z = Conv2D_plus(inputs, 32, 3)
+    Z = ResidualBlock(Z, 64, 1)
+    Z = ResidualBlock(Z, 128, 2)
+    Z = ResidualBlock(Z, 256, 8)
+    Z = ResidualBlock(Z, 512, 8)
+    Z = ResidualBlock(Z, 1024, 4)
+    if classification:
+        Z = GlobalAveragePooling2D()(Z)
+        Z = Dense(num_classes)(Z)
+        Z = Softmax()(Z)
+    darknet = Model(inputs=inputs, outputs=Z, name="Darknet53")
+    if trained:
+        darknet = load_weights(darknet)
+    return darknet
+
+
+def swapPositions(list, pos1, pos2):
+    list[pos1], list[pos2] = list[pos2], list[pos1]
+    return list
+
+def load_weights(model, weights_path = None, save_model = False):
     if not weights_path:
         weights_path = Path('/home/andrea/AI/ispr_yolo/weights/darknet_pretrained')
-        weights_path = weights_path.joinpath('darknet53.weights')
-    weights_array = np.fromfile(weights_path, dtype = np.float32, offset = 20)
+        fp = weights_path.joinpath('darknet53.weights')
+    weights_array = np.fromfile(fp, dtype = np.float32, offset = 20)
     weights_num_counter = 0
-
-    def swapPositions(list, pos1, pos2):
-        list[pos1], list[pos2] = list[pos2], list[pos1]
-        return list
 
 
     for idx in range(180):
@@ -73,3 +103,8 @@ def load_darknet_weights(model, weights_path = None, save_model = False):
         model.save(save_path)
 
     return model
+
+
+if __name__ == '__main__':
+    model = Darknet(trained = True)
+    model.summary()
