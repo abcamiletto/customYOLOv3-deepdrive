@@ -5,4 +5,4 @@ dataset_darknet/
 */.ipynb_checkpoints/*
 *.ipynb
 example.png
-
+__pycache__/
