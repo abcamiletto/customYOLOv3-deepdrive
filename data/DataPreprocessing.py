@@ -12,9 +12,9 @@ import tensorflow as tf
 BATCH_SIZE = 32
 IMG_DIMENSION = 1280
 SCALE = 1
-SMALL = 35
-MEDIUM = 70
-LARGE = 140
+SMALL = 40
+MEDIUM = 80
+LARGE = 160
 
 yolo_anchors = tf.constant([(10, 10), (22, 23), (47, 33), (39, 81), (82, 54), (127, 86),
                          (118, 168), (194, 130), (257, 221)], tf.float32) / IMG_DIMENSION
@@ -118,9 +118,19 @@ class Preprocess:
 
 
 
-def create_dataset(imgdir):
-    dataset = tf.data.Dataset.list_files([imgdir])
+def create_dataset(global_path, batch = 32):
+    dataset = tf.data.Dataset.list_files([global_path])
     mapping_func = Preprocess()
     dataset = dataset.map(mapping_func)
+    if batch == 1:
+        return dataset
     dataset = dataset.batch(32).prefetch(1)
     return dataset
+
+def generate_two_label_example(batch = 1):
+    dataset = create_dataset('/home/andrea/AI/ispr_yolo/data/dataset_bdd/images/100k' + '/train/*.jpg', batch = batch)
+    labels = []
+    for item in dataset.take(2):
+        img, label = item
+        labels.append(label[2])
+    return labels

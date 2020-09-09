@@ -8,8 +8,8 @@ import tensorflow as tf
 from utils import broadcast_iou, xywh_to_y1x1y2x2, xywh_to_x1x2y1y2
 
 # Anchors
-yolo_anchors = np.array([(10, 10), (22, 23), (47, 33), (39, 81), (82, 54), (127, 86),
-                         (118, 168), (194, 130), (257, 221)], np.float32)
+yolo_anchors = tf.constant([(10, 10), (22, 23), (47, 33), (39, 81), (82, 54), (127, 86),
+                         (118, 168), (194, 130), (257, 221)], tf.float32)
 
 
 def decode_into_abs(y_pred, valid_anchor, num_classes = 10):
@@ -17,7 +17,7 @@ def decode_into_abs(y_pred, valid_anchor, num_classes = 10):
         y_pred, (2, 2, 1, num_classes), axis=-1)
     # That's because it's a Logistic classifier
     objectness = tf.sigmoid(objectness)
-#     classes = tf.sigmoid(classes)
+    classes = tf.sigmoid(classes)
 # we're not gonna sigmoid 'em because we're gonna use tf.nn.softmax_cross_entropy_with_logits
     grid_size = tf.shape(y_pred)[1]
     C_xy = tf.meshgrid(tf.range(grid_size), tf.range(grid_size))
@@ -61,11 +61,6 @@ def encode_into_rel(y_true, valid_anchor):
     return y_box
 
 
-# ## Loss Function
-# Before starting with the loss function itself we need some utilities:
-
-# In[8]:
-
 
 def BinaryCrossentropy(pred_prob, labels):
     # I use a custom crossentropy because i need to weight diffently the 2 parts
@@ -74,15 +69,16 @@ def BinaryCrossentropy(pred_prob, labels):
     return -(labels * tf.math.log(pred_prob) +
              (1 - labels) * tf.math.log(1 - pred_prob))
 
-class YoloLoss:
-    def __init__(self, num_classes, valid_anchors_wh = yolo_anchors):
+class YoloLoss(tf.keras.losses.Loss):
+    def __init__(self, num_classes, valid_anchors_wh = yolo_anchors[6:9], **kwargs):
         self.num_classes = num_classes
         self.ignore_thresh = 0.5
         self.valid_anchors_wh = valid_anchors_wh
         self.lambda_coord = 5.0
         self.lamda_noobj = 0.5
+        super().__init__(**kwargs)
 
-    def __call__(self, y_true, y_pred): # In order to call it like a function
+    def __call__(self, y_true, y_pred, sample_weight = None): # In order to call it like a function
         """
         calculate the loss of model prediction for one scale
         """
@@ -100,7 +96,7 @@ class YoloLoss:
                                             pred_box_abs)
 ######### Getting properly formatted values to process the loss functions
 
-        true_box_rel = get_relative_yolo_box(y_true, self.valid_anchors_wh)
+        true_box_rel = encode_into_rel(y_true, self.valid_anchors_wh)
         true_xy_rel = true_box_rel[..., 0:2]
         true_wh_rel = true_box_rel[..., 2:4]
 
@@ -182,7 +178,7 @@ class YoloLoss:
         class_loss: class loss
         """
 
-        class_loss = tf.nn.softmax_cross_entropy_with_logits(true_class, pred_class, axis=-1)
+        class_loss = BinaryCrossentropy(true_class, pred_class)
         class_loss = true_obj * class_loss
         class_loss = tf.reduce_sum(class_loss, axis=(1, 2, 3, 4))
         return class_loss

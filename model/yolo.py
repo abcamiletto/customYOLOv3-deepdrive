@@ -7,7 +7,6 @@ from pathlib import Path
 # Core libraries
 import numpy as np
 import tensorflow as tf
-
 from tensorflow import Tensor
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, UpSampling2D, Conv2D, Concatenate
@@ -15,6 +14,7 @@ from tensorflow.keras.layers import Input, UpSampling2D, Conv2D, Concatenate
 # Useful Darknet Functions written in Darknet53 Notebook
 import darknet53
 from darknet53 import Conv2D_plus, ResidualUnit, ResidualBlock
+
 
 
 def Darknet53_yolo(pretrained = False, name = None) -> Model:
@@ -56,7 +56,9 @@ def YoloUpsampling(inputs, filters):
 
 def YOLOv3(size=None, channels=3, classes=10, training=False):
     X = inputs = Input([size, size, channels])
-    Z_1, Z_2, Z_3 = Darknet53_yolo(pretrained = True, name='darknet')(X)
+    Darknet = Darknet53_yolo(pretrained = True, name='darknet')
+    Darknet.trainable = False
+    Z_1, Z_2, Z_3 = Darknet(X)
 
     # Output number 1
     Z_1 = YoloConv2D(Z_1, 512)
