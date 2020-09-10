@@ -17,7 +17,6 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.layers import Conv2D, LeakyReLU, Add, BatchNormalization, GlobalAveragePooling2D, Dense, Softmax, Input
 
-
 def Conv2D_plus(inputs, filters, kernel_size, stride = 1) -> Tensor:
     X = Conv2D(filters = filters,
                    kernel_size = kernel_size,
@@ -65,9 +64,12 @@ def swapPositions(list, pos1, pos2):
     list[pos1], list[pos2] = list[pos2], list[pos1]
     return list
 
-def load_weights(model, weights_path = None, save_model = False):
+def load_weights(model, weights_path = None, save_model = False, colab = False):
     if not weights_path:
-        weights_path = Path('/home/andrea/AI/ispr_yolo/weights/darknet_pretrained')
+        if colab:
+            weights_path = Path('/content/drive/My Drive/ispr_yolo/weights/darknet_pretrained')
+        else:
+            weights_path = Path('/home/andrea/AI/ispr_yolo/weights/darknet_pretrained')
         fp = weights_path.joinpath('darknet53.weights')
     weights_array = np.fromfile(fp, dtype = np.float32, offset = 20)
     weights_num_counter = 0
