@@ -118,17 +118,17 @@ class Preprocess:
 
 
 
-def create_dataset(global_path, batch = 32):
+def create_dataset(global_path, batch = 32, example = False):
     dataset = tf.data.Dataset.list_files([global_path])
     mapping_func = Preprocess()
     dataset = dataset.map(mapping_func)
-    if batch == 1:
+    if example:
         return dataset
-    dataset = dataset.batch(32).prefetch(1)
+    dataset = dataset.batch(batch).prefetch(1)
     return dataset
 
 def generate_two_label_example(batch = 1):
-    dataset = create_dataset('/home/andrea/AI/ispr_yolo/data/dataset_bdd/images/100k' + '/train/*.jpg', batch = batch)
+    dataset = create_dataset('/home/andrea/AI/ispr_yolo/data/dataset_bdd/images/100k' + '/train/*.jpg', batch = batch, example = True)
     labels = []
     for item in dataset.take(2):
         img, label = item
