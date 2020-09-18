@@ -4,3 +4,4 @@ dataset_bdd/
 *.ipynb
 example.png
 __pycache__/
+mini_bdd/

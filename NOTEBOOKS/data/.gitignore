@@ -6,3 +6,5 @@ dataset_darknet/
 Data_Preprocessing.ipynb
 example.png
 *.py
+*.csv
+__pycache__/
