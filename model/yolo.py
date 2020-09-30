@@ -38,14 +38,14 @@ def YoloConv2D(inputs, filters):
     A = Conv2D_plus(A, filters, 1)
     return A
 
-def YoloOut(inputs, filters, anchors, classes):
+def YoloOut(inputs, filters, anchors, classes, name = None):
     B = Conv2D_plus(inputs, filters * 2, 3)
     B = Conv2D(filters = anchors * (classes + 5),
                kernel_size = 1,
                strides = 1,
                padding = "same",
                use_bias = True)(B)
-    B = tf.reshape(B, (-1,inputs.shape[1],inputs.shape[2],3,15))
+    B = tf.reshape(B, (-1,inputs.shape[1],inputs.shape[2],3,15), name = name)
     return B
 
 def YoloUpsampling(inputs, filters):
@@ -62,19 +62,19 @@ def YOLOv3(size=None, channels=3, classes=10, training=False):
 
     # Output number 1
     Z_1 = YoloConv2D(Z_1, 512)
-    Z_out1 = YoloOut(Z_1, 512, 3, classes)
+    Z_out1 = YoloOut(Z_1, 512, 3, classes, name = 'coarser_grid')
 
     # Output number 2
     Z_1 = YoloUpsampling(Z_1, 256)
     Z_2 = Concatenate()([Z_1, Z_2])
     Z_2 = YoloConv2D(Z_2, 256)
-    Z_out2 = YoloOut(Z_2, 256, 3, classes)
+    Z_out2 = YoloOut(Z_2, 256, 3, classes, name = 'medium_grid')
 
     # Output number 3
     Z_2 = YoloUpsampling(Z_2, 128)
     Z_3 = Concatenate()([Z_2, Z_3])
     Z_3 = YoloConv2D(Z_3, 128)
-    Z_out3 = YoloOut(Z_3, 128, 3, classes)
+    Z_out3 = YoloOut(Z_3, 128, 3, classes, name = 'dense_grid')
 
     if training:
         return Model(inputs, (Z_out3, Z_out2, Z_out1), name='YOLOv3')

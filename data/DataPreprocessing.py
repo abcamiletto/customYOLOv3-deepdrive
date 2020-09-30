@@ -34,7 +34,7 @@ class Preprocess:
         '''
         INPUT: the path of the image i want to preprocess
         OUTPUTS: a Tensor if training is false
-                 a Tuple of (1920x1920, (13x13x3x15, 26x26x2x15, 52x52x3x15))
+                 a Tuple of (1280x1280, (40x40x3x15, 80x80x3x15, 160x160x3x15))
                             (Image, Ground Truth)
         '''
         img = self.load_img(image_path)
@@ -60,22 +60,25 @@ class Preprocess:
             idx = 2
         else: raise ValueError('expected small, medium or large')
 
-
+        #those are the indices in which i'll place the label
         cell = tf.cast(label[..., :2]*grid_size,tf.int64)
         anc = self.find_best_anchor(label)
         mask = tf.equal(anc // 3, idx)
-        anc = anc // 3
+        anc = anc % 3
         cell = tf.concat([cell, tf.expand_dims(anc, 1)], 1)
         cell_filtered = tf.boolean_mask(cell, mask, axis = 0)
         label_filtered = tf.boolean_mask(label, mask, axis = 0)
+        ### getting x,y relative values to cell borders
+        label_filtered = tf.concat([label_filtered[..., :2]*grid_size - tf.floor(label_filtered[..., :2]*grid_size), label_filtered[..., 2:]], 1)
         pro_label = tf.scatter_nd(cell_filtered, label_filtered, [grid_size, grid_size, 3, 15])
 
         return pro_label
 
     def resize_img_n_label(self, img, label):
         img = tf.image.resize_with_pad(img, 1280, 1280)
-        y_shift = (1280-720)/2
+        img = img / 255
 
+        y_shift = (1280-720)/2
         new_label = tf.stack([label[..., 0], label[..., 1]+y_shift], 1)
         new_label = tf.concat([new_label, label[..., 2:]], 1)
         label = tf.concat([new_label[..., 0:4]/IMG_DIMENSION, new_label[..., 4:]], axis = 1)
@@ -96,6 +99,8 @@ class Preprocess:
 
         return best_one
 
+############## Loading images and labels
+
     def load_img(self, img_path):
         img = tf.io.read_file(img_path)
         img = tf.image.decode_jpeg(img, channels=3) #(720, 1280, 3)
@@ -115,13 +120,18 @@ class Preprocess:
         parts = tf.strings.split(img_path, sep = '/images/100k/train/')
         label_path = tf.strings.join([parts[0], '/labels/train_label_raw/', parts[1], '.rawlabel'])
         return label_path
+    
 
 
 
-def create_dataset(global_path, batch = 32, example = False):
+def create_dataset(global_path, batch = 32, train = True, example = False):
     dataset = tf.data.Dataset.list_files([global_path])
     mapping_func = Preprocess()
     dataset = dataset.map(mapping_func)
+    if train:
+        dataset.cache('/home/andrea/AI/ispr_yolo/cache/train')
+    else:
+        dataset.cache('/home/andrea/AI/ispr_yolo/cache/val')
     if example:
         return dataset
     dataset = dataset.batch(batch).prefetch(1)

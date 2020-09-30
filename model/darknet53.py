@@ -4,8 +4,6 @@
 # Utility libraries
 import os
 import random
-import matplotlib.pyplot as plt
-import cv2
 from pathlib import Path
 
 # Core libraries
