@@ -12,12 +12,11 @@ import tensorflow as tf
 BATCH_SIZE = 32
 IMG_DIMENSION = 1280
 SCALE = 1
-SMALL = 40
+COARSE = 40
 MEDIUM = 80
-LARGE = 160
+DENSE = 160
 
-yolo_anchors = tf.constant([(10, 10), (22, 23), (47, 33), (39, 81), (82, 54), (127, 86),
-                         (118, 168), (194, 130), (257, 221)], tf.float32) / IMG_DIMENSION
+yolo_anchors = tf.constant([(19, 19), (43, 46), (94, 66), (77, 163), (163, 107), (253, 172), (237, 337), (388, 260), (514, 441)], tf.float32) / IMG_DIMENSION
 masks = [[0,1,2],
          [3,4,5],
          [6,7,8]]
@@ -25,43 +24,65 @@ masks = [[0,1,2],
 
 
 class Preprocess:
-    def __init__(self, num_classes = 10, output_dimension = 1280, training = True):
+    def __init__(self, num_classes = 10, output_dimension = 1280, training = True, validation = False, augmentation = False, test = False):
         self.num_classes = num_classes
         self.output_dimension = output_dimension
         self.training = training
+        self.validation = validation
+        self.test = test
+        self.augmentation = augmentation
 
     def __call__(self, image_path):
         '''
         INPUT: the path of the image i want to preprocess
         OUTPUTS: a Tensor if training is false
-                 a Tuple of (1280x1280, (40x40x3x15, 80x80x3x15, 160x160x3x15))
+                 a Tuple of (1280x1280, (35x35x3x15, 70x70x3x15, 140x140x3x15))
                             (Image, Ground Truth)
         '''
         img = self.load_img(image_path)
         label = self.load_label(image_path)
+        
+        if self.augmentation:
+            coin = tf.random.uniform([1])
+            if coin > 0.5:
+                img, label = self.augmentation_func(img, label)
+            img = tf.image.random_brightness(img, max_delta=25.0 / 255.0)
+            img = tf.image.random_saturation(img, lower=0.75, upper=1.25)
+        
         img, label = self.resize_img_n_label(img, label)
-
-        output = (img, (self.preprocess_label_for_one_scale('large', label),
+        
+        output = (img, (self.preprocess_label_for_one_scale('dense', label),
               self.preprocess_label_for_one_scale('medium', label),
-              self.preprocess_label_for_one_scale('small', label)))
+              self.preprocess_label_for_one_scale('coarse', label)))
 
         return output
 
+    def augmentation_func(self, img, label):
+        flipped_img = tf.image.flip_left_right(img)
+        bb_n = tf.shape(label)[0]
+        offset = tf.fill([bb_n, 1], 1280)
+        offset = tf.cast(offset,tf.float32)
+        x = tf.expand_dims(label[...,0], axis = 1)
+        flipped_label = tf.concat([offset-x, label[..., 1:]], axis = -1)
+        return flipped_img, flipped_label
 
-    def preprocess_label_for_one_scale(self, grid_size, label):
-        if grid_size == 'small':
-            grid_size = SMALL
+    def preprocess_label_for_one_scale(self, grid_size, label):        
+        if grid_size == 'dense':
+            grid_size = DENSE
             idx = 0
         elif grid_size == 'medium':
             grid_size = MEDIUM
             idx = 1
-        elif grid_size == 'large':
-            grid_size = LARGE
+        elif grid_size == 'coarse':
+            grid_size = COARSE
             idx = 2
         else: raise ValueError('expected small, medium or large')
 
         #those are the indices in which i'll place the label
         cell = tf.cast(label[..., :2]*grid_size,tf.int64)
+        cell_x = cell[..., 0]
+        cell_y = cell[..., 1]
+        cell = tf.stack([cell_y, cell_x], axis = -1)
         anc = self.find_best_anchor(label)
         mask = tf.equal(anc // 3, idx)
         anc = anc % 3
@@ -117,25 +138,32 @@ class Preprocess:
         return label
 
     def get_label_path(self, img_path):
-        parts = tf.strings.split(img_path, sep = '/images/100k/train/')
-        label_path = tf.strings.join([parts[0], '/labels/train_label_raw/', parts[1], '.rawlabel'])
+        if not self.validation and not self.test:
+            parts = tf.strings.split(img_path, sep = '/images/100k/train/')
+            label_path = tf.strings.join([parts[0], '/labels/train_label_raw/', parts[1], '.rawlabel'])
+        elif self.validation:
+            parts = tf.strings.split(img_path, sep = '/images/100k/val/')
+            label_path = tf.strings.join([parts[0], '/labels/val_label_raw/', parts[1], '.rawlabel'])
+        elif self.test:
+            parts = tf.strings.split(img_path, sep = '/images/100k/test/')
+            label_path = tf.strings.join([parts[0], '/labels/val_label_raw/', parts[1], '.rawlabel'])
         return label_path
     
 
 
 
-def create_dataset(global_path, batch = 32, train = True, example = False):
-    dataset = tf.data.Dataset.list_files([global_path])
-    mapping_func = Preprocess()
-    dataset = dataset.map(mapping_func)
-    if train:
-        dataset.cache('/home/andrea/AI/ispr_yolo/cache/train')
-    else:
-        dataset.cache('/home/andrea/AI/ispr_yolo/cache/val')
+def create_dataset(global_path, batch = 32, validation = False, example = False, augmented = False):   
+    AUTOTUNE = tf.data.experimental.AUTOTUNE
+    data = tf.data.Dataset.list_files([global_path])
+    mapping_func = Preprocess(validation = validation)
+    if augmented:
+        mapping_func_augm = Preprocess(augmentation = True)
+        train_ds = data.map(mapping_func_augm)
+    else: train_ds = data.map(mapping_func)
     if example:
-        return dataset
-    dataset = dataset.batch(batch).prefetch(1)
-    return dataset
+        return train_ds
+    train_ds = train_ds.batch(batch).prefetch(1)
+    return train_ds
 
 def generate_two_label_example(batch = 1):
     dataset = create_dataset('/home/andrea/AI/ispr_yolo/data/dataset_bdd/images/100k' + '/train/*.jpg', batch = batch, example = True)
@@ -144,3 +172,11 @@ def generate_two_label_example(batch = 1):
         img, label = item
         labels.append(label[2])
     return labels
+
+def generate_one_example(batch = 1):
+    dataset = create_dataset('/home/andrea/AI/ispr_yolo/data/dataset_bdd/images/100k' + '/train/*.jpg', batch = batch, example = True)
+    labels = []
+    for item in dataset.take(1):
+        img, label = item
+        return img, label
+

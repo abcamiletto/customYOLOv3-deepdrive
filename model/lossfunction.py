@@ -5,24 +5,28 @@
 # Core libraries
 import numpy as np
 import tensorflow as tf
-from utils import broadcast_iou, xywh_to_y1x1y2x2, xywh_to_x1x2y1y2
+from utils import broadcast_iou, xywh_to_x1x2y1y2
 from datetime import datetime
 
 # Anchors
-yolo_anchors_tf = tf.constant([(10, 10), (22, 23), (47, 33), (39, 81), (82, 54), (127, 86),
-                         (118, 168), (194, 130), (257, 221)], tf.float32)
+yolo_anchors_tf = tf.constant([(19, 19), (43, 46), (94, 66),
+                              (77, 163), (163, 107), (253, 172),
+                              (237, 337), (388, 260), (514, 441)], tf.float32)
 
 
-def decode_output(y_pred, valid_anchors, num_classes = 10):
+def decode_output(y_pred, valid_anchors, num_classes = 10, softmax = False):
     t_xy, t_wh, objectness, classes = tf.split(y_pred, (2, 2, 1, num_classes), axis=-1)
-
+    
     # That's because it's a Logistic classifier
     objectness = tf.sigmoid(objectness)
-    classes = tf.sigmoid(classes)
-
+    if softmax:
+        classes = tf.keras.backend.softmax(classes)
+    else:
+        classes = tf.sigmoid(classes)
+    
     o_xy = tf.sigmoid(t_xy)
     b_wh = tf.exp(t_wh) * valid_anchors
-
+    
     y_pred = tf.concat([o_xy, b_wh, objectness, classes], axis=-1)
     return y_pred
 
@@ -44,39 +48,12 @@ def from_rel_to_abs(y_pred, num_classes = 10):
 
 ##########################
 
-    # Now i'm gonna get a tensor like this
-    #
-    # [[[[0, 0]], [[1, 0]], [[2, 0]]],
-    #  [[[0, 1]], [[1, 1]], [[2, 1]]],
-    #  [[[0, 2]], [[1, 2]], [[2, 2]]]]
-    #
-    # we have a grid, which can always give us (y, x)
-    # if we access grid[x][y]. For example, grid[0][1] == [[1, 0]]
-
     C_xy = tf.meshgrid(tf.range(grid_size), tf.range(grid_size))
     C_xy = tf.stack(C_xy, axis=-1)
     C_xy = tf.expand_dims(C_xy, axis=2)
 
-##########################
-
-    # bx = sigmoid(tx) + Cx
-    # by = sigmoid(ty) + Cy
-    #
-    # for example, if all elements in b_xy are (0.1, 0.2), the result will be
-    #
-    # [[[[0.1, 0.2]], [[1.1, 0.2]], [[2.1, 0.2]]],
-    #  [[[0.1, 1.2]], [[1.1, 1.2]], [[2.1, 1.2]]],
-    #  [[[0.1, 2.2]], [[1.1, 2.2]], [[2.1, 2.2]]]]
 
     b_xy = o_xy + tf.cast(C_xy, tf.float32)
-
-    # finally, divide this absolute box_xy by grid_size, and then we will get the normalized bbox centroids
-    # for each anchor in each grid cell. b_xy is now in shape (batch_size, grid_size, grid_size, num_anchor, 2)
-    #
-    # [[[[0.1/3, 0.2/3]], [[1.1/3, 0.2/3]], [[2.1/3, 0.2/3]]],
-    #  [[[0.1/3, 1.2/3]], [[1.1/3, 1.2]/3], [[2.1/3, 1.2/3]]],
-    #  [[[0.1/3, 2.2/3]], [[1.1/3, 2.2/3]], [[2.1/3, 2.2/3]]]]
-    #
     b_xy = b_xy / tf.cast(grid_size, tf.float32)
 
 ##########################
@@ -118,20 +95,21 @@ def BinaryCrossentropy(pred_prob, labels):
              (1 - labels) * tf.math.log(1 - pred_prob))
 
 class YoloLoss(tf.keras.losses.Loss):
-    def __init__(self, num_classes, size, anchors = yolo_anchors_tf, **kwargs):
+    def __init__(self, num_classes, size, softmax = False, **kwargs):
         self.num_classes = num_classes
         self.ignore_thresh = 0.5
         self.lambda_coord = 5.0
         self.lamda_noobj = 0.5
-        self.anchors = anchors
+        self.lamda_softmax = 15
         self.size = size
+        self.softmax = softmax
         if self.size == 'dense':
-            self.valid_anchors = self.anchors[0:3]
+            self.valid_anchors = yolo_anchors_tf[0:3]
         if self.size == 'medium':
-            self.valid_anchors = self.anchors[3:6]
+            self.valid_anchors = yolo_anchors_tf[3:6]
         if self.size == 'coarse':
-            self.valid_anchors = self.anchors[6:9]
-        self.writer = tf.summary.create_file_writer("/home/andrea/AI/ispr_yolo/NOTEBOOKS/training/logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + '/' + self.size)
+            self.valid_anchors = yolo_anchors_tf[6:9]
+        self.writer = tf.summary.create_file_writer("logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + '/' + self.size)
         super().__init__(**kwargs)
 
     def __call__(self, y_true, y_pred, sample_weight = None): # In order to call it like a function
@@ -149,7 +127,7 @@ class YoloLoss(tf.keras.losses.Loss):
 ######### sort of "Non Max Suppression" to get an ignore mask, we need the absolute values!
 
         # this box is used to calculate IoU, NOT loss.
-        y_pred_decoded = decode_output(y_pred, self.valid_anchors)
+        y_pred_decoded = decode_output(y_pred, self.valid_anchors, softmax = self.softmax)
         pred_box_abs, pred_obj, pred_class = from_rel_to_abs(y_pred_decoded, self.num_classes)
         pred_box_abs = xywh_to_x1x2y1y2(pred_box_abs)
 
@@ -197,20 +175,20 @@ class YoloLoss(tf.keras.losses.Loss):
 
         class_loss = self.calc_class_loss(true_obj, true_class, pred_class)
         obj_loss = self.calc_obj_loss(true_obj, pred_obj, ignore_mask)
-        
-        
+
+
         tensorboard_names = ["batch xy loss " + self.size,
                              "batch wh loss " + self.size,
                              "batch class loss " + self.size,
                              "batch obj loss " + self.size]
-                             
+
         with self.writer.as_default():
             tf.summary.scalar(tensorboard_names[0], tf.reshape(tf.reduce_sum(xy_loss), []), step=1)
             tf.summary.scalar(tensorboard_names[1], tf.reshape(tf.reduce_sum(wh_loss), []), step=1)
             tf.summary.scalar(tensorboard_names[2], tf.reshape(tf.reduce_sum(class_loss), []), step=1)
             tf.summary.scalar(tensorboard_names[3], tf.reshape(tf.reduce_sum(obj_loss), []), step=1)
             self.writer.flush()
-        
+
         # YoloV1: Function (3)
         return xy_loss + wh_loss + class_loss + obj_loss
 
@@ -286,7 +264,14 @@ class YoloLoss(tf.keras.losses.Loss):
         # "Note that the loss function only penalizes classiﬁcation error
         # if an object is present in that grid cell (hence the conditional
         # class probability discussed earlier)."
-        class_loss = BinaryCrossentropy(true_class, pred_class)
+#         class_loss = tf.nn.softmax_cross_entropy_with_logits(true_class, pred_class)
+#         class_loss = tf.expand_dims(class_loss, axis = -1)
+        if self.softmax:
+            class_loss = tf.keras.backend.categorical_crossentropy(true_class, pred_class, from_logits=False, axis=-1)
+            class_loss = tf.expand_dims(class_loss, axis = -1)
+            class_loss = class_loss * self.lamda_softmax
+        else:
+            class_loss = BinaryCrossentropy(true_class, pred_class)
         class_loss = true_obj * class_loss
         class_loss = tf.reduce_sum(class_loss, axis=(1, 2, 3, 4))
         return class_loss
@@ -336,5 +321,3 @@ class YoloLoss(tf.keras.losses.Loss):
         wh_loss = true_obj * wh_loss * weight
         wh_loss = tf.reduce_sum(wh_loss, axis=(1, 2, 3)) * self.lambda_coord
         return wh_loss
-    
-    

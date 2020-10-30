@@ -19,8 +19,8 @@ import json
 def pov_change(x1,x2,y1,y2):
     xb = (x1+x2)/(2)
     yb = (y1+y2)/(2)
-    wb = abs(x1-x2)/2
-    hb = abs(y1-y2)/2
+    wb = abs(x1-x2)
+    hb = abs(y1-y2)
     return xb,yb,wb,hb
 
 #Loading a JSON file into a Python variable
