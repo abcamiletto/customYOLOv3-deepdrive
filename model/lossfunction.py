@@ -100,7 +100,7 @@ class YoloLoss(tf.keras.losses.Loss):
         self.ignore_thresh = 0.5
         self.lambda_coord = 5.0
         self.lamda_noobj = 0.5
-        self.lamda_softmax = 15
+        self.lamda_softmax = 10.0
         self.size = size
         self.softmax = softmax
         if self.size == 'dense':
