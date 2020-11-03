@@ -105,10 +105,13 @@ class YoloLoss(tf.keras.losses.Loss):
         self.softmax = softmax
         if self.size == 'dense':
             self.valid_anchors = yolo_anchors_tf[0:3]
+            self.weight = 0.3
         if self.size == 'medium':
             self.valid_anchors = yolo_anchors_tf[3:6]
+            self.weight = 1.0
         if self.size == 'coarse':
             self.valid_anchors = yolo_anchors_tf[6:9]
+            self.weight = 2.0
         self.writer = tf.summary.create_file_writer("logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S") + '/' + self.size)
         super().__init__(**kwargs)
 
@@ -190,7 +193,7 @@ class YoloLoss(tf.keras.losses.Loss):
             self.writer.flush()
 
         # YoloV1: Function (3)
-        return xy_loss + wh_loss + class_loss + obj_loss
+        return (xy_loss + wh_loss + class_loss + obj_loss) * self.weight
 
     def nonmax_mask(self, true_obj, true_box, pred_box):
         # YOLOv3:
