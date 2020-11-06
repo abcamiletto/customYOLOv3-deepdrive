@@ -43,5 +43,4 @@ When in doubt, always look at the Notebook instead of the python code: those are
 There are mainly 2 repo i looked into and i want to thank:
 
  - https://github.com/ethanyanjiali/deep-vision
- 
  - https://github.com/qqwweee/keras-yolo3
