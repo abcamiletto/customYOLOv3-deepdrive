@@ -38,3 +38,10 @@ The main improvements came with:
 
 ## Overall take on the code
 When in doubt, always look at the Notebook instead of the python code: those are the one i kept on using on the final stage!
+
+### References
+There are mainly 2 repo i looked into and i want to thank:
+
+ - https://github.com/ethanyanjiali/deep-vision
+ 
+ - https://github.com/qqwweee/keras-yolo3
